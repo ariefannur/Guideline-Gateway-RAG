@@ -73,12 +73,13 @@ The football rules (*Laws of the Game*) serve as the **reference use case and te
 - **FR-4 Search-only mode:** if the SLM is unavailable or too slow, show the retrieved clauses without generation.
 - **FR-5 Domain glossary:** ID↔EN term mapping (e.g., Indonesian "tendangan bebas langsung" ↔ *direct free kick*) to expand queries.
 - **FR-6 Knowledge Pack manager:** install, list, activate, roll back, and verify pack integrity.
-- **FR-7 Interfaces:** CLI, local REST API, and a simple local web UI (optionally mobile/desktop clients on the same API).
-- **FR-8 Optional local history:** stored locally, can be disabled or deleted.
+- **FR-7 Interfaces:** CLI, local REST API, and a lightweight web chat UI built with **Svelte + Tailwind CSS** (compiled into static assets and served directly by FastAPI).
+- **FR-8 Multi-turn conversation & local history:** supports conversational follow-up questions within a session. Query processor contextualizes follow-up questions using recent history (last 2–3 turns) with a dedicated sliding token budget. Stored locally, can be cleared or deleted.
 - **FR-9 Feedback:** a "wrong/insufficient answer" button stored locally for the next pack improvement (exported manually).
 - **FR-10 Domain profile:** parser, chunking strategy, prompt template, answer format, router, and guardrails are selected through configuration in `pack.yaml`, not through code.
 - **FR-11 Multi-pack:** several packs can be installed at once; the user selects the active pack. Cross-pack routing is deferred to v1.1.
 - **FR-12 Pack template & validator:** `kpack init` creates a new pack skeleton; `kpack validate` checks completeness (glossary, router, golden set, SOURCES.md) before build.
+- **FR-13 Two-stage Ingestion & Auditability:** pipeline ekstraksi PDF menghasilkan intermediate Markdown berstruktur sebelum di-chunk dan di-indeks, sehingga admin dapat mengaudit teks regulasi sebelum dijadikan basis data vektor.
 
 ## 7. Non-Functional Requirements
 
@@ -137,7 +138,7 @@ Football was chosen as the test case because its rules are hierarchical, full of
 - Additional parts: definitions, interpretations, VAR protocol, tie-break procedures (if present in the document).
 - The ID↔EN glossary is written manually by the admin (not model-generated).
 
-**Out of scope for v1:** competition-specific regulations (e.g., a particular league or country), futsal, beach soccer, match results/news.
+**Out of scope for v1:** competition-specific regulations (e.g., a particular league or country), futsal, beach soccer, match results/news. Visual/diagram/infographic parsing (misal: diagram posisi offside visual) di-flag untuk fase berikutnya (Phase 2); v1 murni fokus pada struktur teks dan klausul hierarkis.
 
 ## 10. Risks & Mitigations
 
@@ -151,24 +152,84 @@ Football was chosen as the test case because its rules are hierarchical, full of
 | Outdated rule edition | Stale answers | Show edition in the UI; warn if the pack is over 1 year old; offline update mechanism |
 | Poor PDF parsing (tables/figures) | Corrupted context | Validate parsing output, manual correction at build time, golden tests |
 
-## 11. Milestones
+## 11. MVP Scope Prioritization (P0 / P1 / P2)
+
+Untuk mencegah *scope creep*, seluruh kapabilitas dan pekerjaan dikelompokkan ke dalam 3 tingkat prioritas:
+
+### 🔴 P0 — Core MVP (Must-Have / Blocker)
+> **Goal:** Membuktikan sistem berfungsi penuh *end-to-end* secara offline: dari file PDF ➔ Ingestion ➔ SQLite + NumPy Hybrid Search ➔ SLM lokal ber-sitasi ➔ Svelte Web UI.
+
+* **Epic 1: Ingestion & Pack Builder (`kpack`)**
+  * `TASK-1.1`: Ekstraksi PDF ke Intermediate Markdown (`laws.md`) via `PyMuPDF` (denoising running header, footer, page number).
+  * `TASK-1.2`: Structure-aware Chunker (memotong klausul 150–350 token + menyematkan Contextual Header `[Law X > ...]`).
+  * `TASK-1.3`: Batch embedding model `multilingual-e5-small` (ONNX Runtime CPU) + normalisasi L2.
+  * `TASK-1.4`: SQLite Builder (tabel `chunks` dengan metadata, teks, dan `embedding BLOB` + virtual table FTS5).
+  * `TASK-1.5`: Packaging arsip file `.kpack`.
+* **Epic 2: Core Engine & Retrieval (`engine`)**
+  * `TASK-2.1`: Pack Loader (buka SQLite dan load matriks embedding ke NumPy array in-memory ~1.5 MB).
+  * `TASK-2.2`: Hybrid Search (BM25 via SQLite FTS5 + Cosine Similarity via NumPy dot product).
+  * `TASK-2.3`: Fusi peringkat menggunakan Reciprocal Rank Fusion (RRF, k=60).
+  * `TASK-2.4`: Hard Abstain threshold (Cosine Similarity Top-1 < `min_score` 0.35 ➔ langsung return `abstain`).
+* **Epic 3: SLM Generation & Guardrails (`engine`)**
+  * `TASK-3.1`: Runtime `llama-cpp-python` untuk memuat model GGUF lokal (Qwen2.5-1.5B Q4).
+  * `TASK-3.2`: Context Builder (merakit system prompt + evidence chunk `[C1]`, `[C2]` sesuai token budget).
+  * `TASK-3.3`: Grounded Prompting (instruksi hanya menjawab dari konteks, format baku).
+  * `TASK-3.4`: Regex Citation Validator (memastikan tag `[C#]` valid terhadap konteks yang disajikan).
+* **Epic 4: Server & Web UI (`server` & `ui`)**
+  * `TASK-4.1`: FastAPI server: endpoint `POST /v1/ask` (support non-stream & SSE streaming).
+  * `TASK-4.2`: Web UI Svelte + Tailwind CSS (chat bubble responsif, badge sitasi `[C#]` interaktif).
+  * `TASK-4.3`: FastAPI me-mount static build dari Svelte (`ui/dist/`) di root `/`.
+
+---
+
+### 🟡 P1 — MVP Polish (Should-Have / Fast-Follow)
+> **Goal:** Meningkatkan akurasi kueri ID/EN, percakapan lanjutan (multi-turn), manajemen pack, dan evaluasi regresi.
+
+* **Epic 5: Query Processor & Multi-Turn**
+  * `TASK-5.1`: Multi-turn query contextualization (ringkas query lanjutan menggunakan 1–2 percakapan sebelumnya).
+  * `TASK-5.2`: Integrasi `glossary.yaml` (ekspansi istilah Indonesia ke Inggris untuk BM25).
+  * `TASK-5.3`: Integrasi `router.yaml` (skor boost berdasarkan topik Law).
+* **Epic 6: CLI & Pack Management**
+  * `TASK-6.1`: User CLI: `gateway ask "pertanyaan"` dan `gateway serve`.
+  * `TASK-6.2`: Admin CLI: `kpack build packs/football-laws/` dan `kpack validate`.
+  * `TASK-6.3`: Endpoint manajemen pack (`GET /v1/packs`, `POST /v1/packs/{id}/activate`).
+* **Epic 7: Evaluasi & Golden Set Awal**
+  * `TASK-7.1`: Dataset mini `golden.jsonl` (30 pertanyaan aturan sepak bola).
+  * `TASK-7.2`: Automated evaluation test runner (Recall@5 & Abstain Accuracy).
+
+---
+
+### ⚪ P2 — Post-MVP / Phase 2 (Sengaja Ditunda)
+> **Goal:** Fitur tingkat lanjut yang **TIDAK** dikerjakan pada rilis MVP.
+
+1. **Multimodal / Diagram Parsing:** Ekstraksi gambar diagram visual offside atau infografis lapangan.
+2. **Android Native / JNI Build:** Build standalone smartphone APK.
+3. **Cross-Pack Federation:** Pencarian lintas beberapa knowledge pack sekaligus.
+4. **Constrained Decoding (GBNF Grammar):** Enforcement token via grammar formal (digantikan regex validator di P0).
+5. **Auto-judge LLM Dev Pipeline:** Evaluator otomatis menggunakan model cloud besar.
+
+---
+
+## 12. Milestones
 
 | Phase | Duration | Output |
 | --- | --- | --- |
 | **M0 — Research & Setup** | 1 week | Final model choices, first benchmarks on target hardware |
-| **M1 — Ingestion & Retrieval** | 2 weeks | Parser, chunker, hybrid index, retrieval eval (Recall@k) |
-| **M2 — Generation & Guardrails** | 2 weeks | Prompt, SLM runtime, citations, abstain, faithfulness eval |
-| **M3 — Interfaces & Pack Manager** | 2 weeks | CLI, REST API, web UI, pack install/rollback |
-| **M4 — Pilot & Evaluation** | 2 weeks | Test with real referees/coaches, fixes from feedback |
+| **M1 — Ingestion & Retrieval (P0)** | 2 weeks | Parser, chunker, hybrid index, retrieval eval (Recall@k) |
+| **M2 — Generation & Guardrails (P0)** | 2 weeks | Prompt, SLM runtime, citations, abstain, faithfulness eval |
+| **M3 — Interfaces & Pack Manager (P0/P1)** | 2 weeks | CLI, REST API, Svelte + Tailwind CSS Web Chat UI (compiled static SPA), pack install/rollback |
+| **M4 — Pilot & Evaluation (P1)** | 2 weeks | Test with real referees/coaches, fixes from feedback |
 | **M5 — Generalization** | 1–2 weeks | Pack template, new-domain documentation, a second pack with a different document structure as the agnostic test (v1 release gate) |
 
-## 12. Open Questions
+## 13. Open Questions & Decided Items
 
-1. Priority client platform: desktop/laptop only, or Android from v1?
-2. Will the pack be distributed to others (licensing issue) or used internally only?
-3. Are answer languages beyond ID/EN needed?
-4. How much tolerance is there for "search-only" mode on very weak devices?
-5. Who is the rule "validator" (licensed referee) for the golden set?
+1. **Client Platform & Web UI (Decided):** MVP berfokus pada Desktop/Laptop via CLI, Local REST API, dan Web Chat UI berbasis **Svelte + Tailwind CSS** (di-build sebagai static SPA yang disajikan oleh FastAPI). Dukungan Android native/JNI dialokasikan untuk fase lanjutan.
+2. **Multi-turn Support (Decided):** Mendukung percakapan lanjutan (*follow-up*) dengan query contextualizer dan token sliding budget (~400 token).
+3. **Diagrams/Images (Decided):** Ekstraksi dan pemrosesan visual/diagram di-flag untuk fase berikutnya; v1 murni teks regulasi terstruktur.
+4. Will the pack be distributed to others (licensing issue) or used internally only?
+5. Are answer languages beyond ID/EN needed?
+6. How much tolerance is there for "search-only" mode on very weak devices?
+7. Who is the rule "validator" (licensed referee) for the golden set?
 
 ---
 
@@ -200,9 +261,9 @@ Source PDF/Docs                                 Client: CLI / Web UI / Mobile
    │  (Law > Section > Clause)                      │  lang detect, glossary, scope check
    ▼                                                   ▼
 [3] Embedding (small multilingual model)        [C] Hybrid Retriever
-   │                                                │  BM25 (FTS5) + Vector (sqlite-vec) → RRF
+   │                                                │  BM25 (FTS5) + Vector (NumPy In-Memory) → RRF
    ▼                                                ▼
-[4] Index Builder (SQLite + FTS5 + vec)         [D] (optional) Light Reranker
+[4] Index Builder (SQLite + FTS5 + BLOB)        [D] (optional) Light Reranker
    │                                                ▼
    ▼                                            [E] Context Builder (token budget)
 [5] Eval Harness (golden set)                       ▼
@@ -255,7 +316,7 @@ Each extension point is a small interface with contract tests. Plugins load from
 
 ```
 football-laws-2026-27.kpack   (zip)
-├── manifest.json        # id, version, source edition, hash, embedding model, schema
+├── manifest.json        # id, version, source edition, hash, required model specs & dims, schema
 ├── pack.yaml            # domain configuration (see 3.2)
 ├── knowledge.sqlite     # chunk table + FTS5 + vectors
 ├── glossary.yaml        # ID↔EN terms, synonyms
@@ -267,6 +328,9 @@ football-laws-2026-27.kpack   (zip)
 │   └── golden.jsonl     # questions, reference answers, evidence chunks
 └── SOURCES.md           # source attribution & licensing
 ```
+
+> [!NOTE]
+> **Pemisahan Model vs Pack:** File bobot model (GGUF generator dan ONNX embedding) **tidak dibungkus** di dalam `.kpack` agar ukuran pack tetap ringan (hitungan megabyte). File model disimpan di direktori global runtime host (misal: `~/.guideline-gateway/models/` atau `./models/`). File `manifest.json` mencatat spesifikasi model, dimensi embedding, dan checksum yang wajib dipenuhi oleh host.
 
 ### 3.2 Example `pack.yaml`
 
@@ -295,41 +359,108 @@ answer_format: [verdict, basis, caveat]
 disclaimer: "Official decisions rest with the referee/competition authority."
 ```
 
-## 4. Ingestion & Chunking
+## 4. Ingestion & Chunking Pipeline
 
-**Parsing:** extract PDF text while preserving structure (headings, Law numbers, bullets, simple tables). Important tables/figures (e.g., offside diagrams) are rewritten manually by the admin as descriptive text and tagged `source_type: manual_description`.
+Tahap ingestion dirancang dengan prinsip **kualitas data di atas segalanya** (*garbage in, garbage out*). Pipeline menggunakan pendekatan **2-Tahap (Two-Stage Pipeline)** dengan representasi perantara (*intermediate markdown*) agar admin dapat mengaudit dan memverifikasi teks regulasi sebelum di-indeks ke dalam basis data.
 
-**Structure-aware chunking:**
+```
+Source PDF
+   │
+   ▼
+[1] PDF Structural Parser (PyMuPDF / fitz)
+   │  - Deteksi font size & weight untuk hierarki heading
+   │  - Bounding-box filtering (buang running header, footer, page number)
+   │  - Skip diagram/image (di-flag untuk Phase 2)
+   ▼
+[2] Intermediate Structured Markdown (laws.md)
+   │  - Format bersih berstruktur Markdown (# Law, ## Section, ### Clause)
+   │  - Dapat diaudit & dikoreksi manual oleh admin jika diperlukan
+   ▼
+[3] Structure-Aware Chunker
+   │  - Memotong per klausul/sub-pasal (150–350 tokens)
+   │  - Menempelkan Contextual Header: [Law X > Section Y > Clause Z]
+   ▼
+[4] Batch Vector Embedding (ONNX Runtime CPU)
+   │  - Model: multilingual-e5-small (dim 384)
+   │  - Normalisasi L2 (agar dot-product identik dengan cosine similarity)
+   ▼
+[5] Index Storage (knowledge.sqlite)
+      - Tabel chunks (metadata + raw text + embedding BLOB)
+      - Virtual table FTS5 (full-text search BM25)
+```
 
-- Base unit: the **clause/sub-section** within a Law, not blind fixed-size slices.
-- Target size: 150–350 tokens; long passages split at sentence boundaries with a small overlap (±30 tokens).
-- A **contextual header** is prepended to each chunk: `Law 11 — Offside > Offside offence > Interfering with an opponent`.
-- Metadata per chunk:
+### 4.1 Detail Tahapan Ingestion
+
+#### A. PDF Extraction & Noise Filtering (Denoising)
+* **Library:** `PyMuPDF` (`fitz`) dipilih karena performa ekstraksi teks sangat cepat (C-based) serta mampu membaca atribut teks per-blok (`font_size`, `font_weight`, dan koordinat `bbox`).
+* **Denoising Rules:**
+  1. *Header & Footer Stripping:* Koordinat vertikal ($y < \text{margin\_top}$ dan $y > \text{margin\_bottom}$) diabaikan otomatis untuk membuang running header dokumen dan nomor halaman.
+  2. *Artifact Cleaning:* Menghapus karakter ligatur PDF aneh, spasi ganda, dan baris kosong berlebih.
+  3. *Diagram & Image Flagging:* Gambar, diagram lapangan, dan ilustrasi diabaikan untuk v1 (di-flag untuk Phase 2). Parser hanya fokus pada teks klausul regulasi murni.
+
+#### B. Intermediate Representation (Structured Markdown)
+* Hasil ekstraksi PDF dikonversi menjadi file perantara Markdown standar (`sources/extracted/laws.md`):
+  * `# Law 11 — Offside`
+  * `## 1. Offside Position`
+  * `### 1.1 Clause Detail`
+* **Keuntungan:** Admin dapat me-review, membandingkan dengan PDF asli via `git diff`, atau menyisipkan koreksi kata sebelum diproses ke database vektor.
+
+#### C. Structure-Aware Chunking & Contextual Header
+* **Unit Pemotongan:** Berbasis klausul atau butir aturan regulasi (bukan pemotongan buta berbasis jumlah karakter tetap).
+* **Ukuran Target:** 150–350 token per chunk. Jika ada butir klausul yang panjang, dipotong pada batas kalimat dengan tumpang tindih (*overlap*) ±30 token.
+* **Contextual Header Enrichment:** Setiap teks chunk disisipkan *breadcrumb* hierarki di baris paling atas sebelum di-embed:
+  ```text
+  [Law 11 — Offside > 2. Offside Offence > Interfering with an opponent]
+  A player in an offside position at the moment the ball is played or touched by a team-mate is only penalised on becoming involved in active play by interfering with play...
+  ```
+  *Contextual header ini krusial agar model SLM dan pencarian vektor memahami konteks hierarki pasal secara utuh.*
+
+#### D. Batch Embedding & Storage
+* **Runtime:** ONNX Runtime (CPU-optimized, batch size 32 chunk).
+* **Normalisasi L2:** Seluruh vektor embedding di-normalisasi ($\|v\|_2 = 1$). Dengan ini, perhitungan *cosine similarity* pada saat runtime disederhanakan menjadi operasi perkalian titik (*dot product*) NumPy yang selesai dalam < 1 milidetik.
+* **Metadata per chunk:**
 
 ```json
 {
-  "chunk_id": "law11-3-2",
+  "chunk_id": "law11-2-1",
   "law_no": 11,
   "law_title": "Offside",
-  "path": ["Offside offence", "Interfering with an opponent"],
+  "path": ["Offside offence", "Interfering with play"],
   "page": 94,
-  "edition": "2026/27",
+  "edition": "2024/25",
   "lang": "en",
-  "text": "...",
+  "text": "[Law 11 — Offside > 2. Offside Offence > Interfering with play]\nA player in an offside position...",
   "source_type": "original"
 }
 ```
 
-**SQLite schema (abridged):**
+### 4.2 SQLite Schema
 
 ```sql
 CREATE TABLE chunks(
-  chunk_id TEXT PRIMARY KEY, law_no INT, law_title TEXT,
-  path TEXT, page INT, edition TEXT, source_type TEXT, text TEXT
+  chunk_id TEXT PRIMARY KEY,
+  law_no INT,
+  law_title TEXT,
+  path TEXT,
+  page INT,
+  edition TEXT,
+  source_type TEXT,
+  text TEXT,
+  embedding BLOB  -- Array float32 384 dim (1.536 bytes raw byte buffer)
 );
-CREATE VIRTUAL TABLE chunks_fts USING fts5(text, law_title, path, content='chunks');
-CREATE VIRTUAL TABLE chunks_vec USING vec0(embedding float[384]);  -- sqlite-vec
+
+CREATE VIRTUAL TABLE chunks_fts USING fts5(
+  chunk_id UNINDEXED,
+  law_title,
+  path,
+  text,
+  content='chunks',
+  content_rowid='rowid'
+);
 ```
+
+> [!NOTE]
+> **Vector Search via NumPy In-Memory:** Embedding disimpan sebagai raw bytes (`BLOB`) di SQLite. Saat Knowledge Pack dibuka pada runtime, seluruh embedding di-load ke NumPy 2D array in-memory (~1.5 MB RAM untuk ~1.000 chunks). Pencarian vector (cosine similarity) berjalan murni in-memory dalam < 1 ms menggunakan NumPy tanpa dependensi C-extension seperti `sqlite-vec`, menjamin portabilitas 100% di semua OS dan hardware minimal.
 
 ## 5. Model Selection
 
@@ -364,24 +495,29 @@ A light cross-encoder (or a heuristic combined score) is enabled only on Tier B 
 
 ### 6.1 Query Processor
 
-1. **Normalization** (lowercase, strip excess punctuation).
-2. **Language detection** (light, rule-based or small library).
-3. **Glossary expansion**: add English equivalents for Indonesian terms (e.g., "ofsaid" → *offside*, "kartu merah" → *sending-off, red card*).
-4. **Topic router**: keyword rules map the query to candidate document sections via router.yaml (e.g., on the football pack: "penalti" → Law 14, "tangan" → Law 12). The router result is a **boost**, not a hard filter.
-5. **Early scope check**: a query with no adequate semantic/lexical match → abstain here.
+1. **Multi-turn Contextualization**: jika request menyertakan riwayat percakapan sebelumnya (*chat history*), pertanyaan lanjutan (misal: *"bagaimana jika bolanya kena kiper dulu?"*) diringkas/dikontekstualisasikan menjadi query mandiri berbasis konteks putaran terakhir sebelum retrieval.
+2. **Normalization** (lowercase, strip excess punctuation).
+3. **Language detection** (light, rule-based or small library).
+4. **Glossary expansion**: add English equivalents for Indonesian terms (e.g., "ofsaid" → *offside*, "kartu merah" → *sending-off, red card*).
+5. **Topic router**: keyword rules map the query to candidate document sections via router.yaml (e.g., on the football pack: "penalti" → Law 14, "tangan" → Law 12). The router result is a **boost**, not a hard filter.
+6. **Early scope check**: a query with no adequate semantic/lexical match → abstain here.
 
 ### 6.2 Hybrid Retrieval
 
 - BM25 through SQLite FTS5 on the query (ID + expanded EN).
-- Vector search through sqlite-vec on the query embedding.
+- Vector search: Cosine similarity via NumPy in-memory matrix multiplication over cached chunk embeddings.
 - Fuse with **Reciprocal Rank Fusion** (k=60), then apply the router boost.
 - Complex/situational queries: split deterministically by router result into sub-queries per Law (max 3) and merge the results.
 - Output: `fused_top_k` chunks + scores.
 
 ### 6.3 Context Builder
 
-- Context budget (default \~2200 tokens out of a 4096 window): order chunks by score, add until the budget is used, deduplicate adjacent chunks (merge consecutive clauses).
-- Each chunk is labeled `[C1]`, `[C2]`, … with its Law/page header.
+- **Context budget allocation** (total window 2048–4096 tokens):
+  - System prompt: ~200 tokens
+  - Multi-turn recent history (sliding window 2–3 putaran terakhir): maks ~400 tokens
+  - Retrieved evidence chunks (`[C1]`, `[C2]`, …): ~1500–2200 tokens (order chunks by score, add until budget exhausted, deduplicate adjacent clauses)
+  - Model generation output budget: ~350–500 tokens
+- Setiap chunk bukti dilabeli `[C1]`, `[C2]`, … lengkap dengan header Law/page.
 
 ### 6.4 Generation
 
@@ -417,7 +553,11 @@ Parameters: low temperature (0.0–0.2), limited `max_new_tokens`, *stop sequenc
 // Request
 {
   "pack_id": "football-laws",
-  "question": "Can a player be offside from a throw-in?",
+  "question": "Bagaimana jika bolanya disentuh pemain lawan sebelum masuk?",
+  "history": [
+    { "role": "user", "content": "Can a player be offside from a throw-in?" },
+    { "role": "assistant", "content": "No. A player cannot be penalized for offside ... [C1]" }
+  ],
   "mode": "answer",          // "answer" | "search_only"
   "stream": true
 }
@@ -462,9 +602,9 @@ Note: the server binds to `127.0.0.1` only by default.
 | --- | --- | --- | --- |
 | LLM runtime | **llama.cpp** (GGUF) via `llama-cpp-python` | Mature CPU support, quantization, runs on all OSes | llama.cpp server / native binding; Android via JNI |
 | Embedding runtime | ONNX Runtime or llama.cpp (embedding GGUF) | Light, CPU-friendly | Same |
-| Storage | **SQLite** + FTS5 + **sqlite-vec** | Single file, no server, easy to bundle | Same |
+| Storage | **SQLite** + FTS5 + **NumPy In-Memory** (embeddings as BLOB) | Single file, no server, 100% portable cross-platform without native C extensions, <1ms vector latency | Same |
 | Backend | Python (FastAPI) | Fast iteration | Rust/Go or C++ for a single binary |
-| UI | Simple static web UI (served locally) | No extra installation | Native/mobile clients use the same REST API |
+| UI | **Svelte + Tailwind CSS** (SPA build, served statically by FastAPI) | Highly reactive, modern styling, lightweight bundle, smooth streaming token rendering | Native/mobile clients use the same REST API |
 | Build pipeline | Python CLI (`kpack build`) | Reproducible, scriptable | Local CI |
 | Packaging | PyInstaller / bundle with model | One-install distribution | Per-OS installers |
 
@@ -559,7 +699,8 @@ guideline-gateway/
 ├── engine/            # generic: query, retrieval, context, generation, guardrails
 ├── kpack/             # generic build pipeline: parse, chunk, embed, index, eval, package
 ├── profiles/          # domain profiles: hierarchical-clause, procedural-steps, section-table, qa-pair
-├── server/            # REST API + static web UI
+├── server/            # REST API + serves static web UI
+├── ui/                # Svelte + Tailwind CSS frontend chat interface (builds to static assets for server)
 ├── cli/               # ask, packs, bench, kpack init/validate/build
 ├── packs/
 │   ├── _template/     # empty pack skeleton
