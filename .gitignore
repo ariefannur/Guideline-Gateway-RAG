@@ -93,3 +93,6 @@ yarn-error.log*
 .svelte-kit/
 ui/dist/
 web/dist/
+
+# Pdf file
+*.pdf
