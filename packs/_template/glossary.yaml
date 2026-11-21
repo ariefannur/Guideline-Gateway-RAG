@@ -1,0 +1,9 @@
+# Glossary mapping domain terms (e.g. Indonesian to English equivalents)
+# Term: [synonyms, english_terms]
+istilah:
+  - term
+  - definition
+aturan:
+  - rule
+  - clause
+  - regulation

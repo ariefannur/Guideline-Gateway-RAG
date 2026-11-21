@@ -1,0 +1,60 @@
+# Indonesian to English IFAB football terminology mapping
+ofsaid:
+  - offside
+offside:
+  - offside
+kartu merah:
+  - sending-off
+  - red card
+kartu kuning:
+  - caution
+  - yellow card
+penalti:
+  - penalty kick
+tendangan penalti:
+  - penalty kick
+kiper:
+  - goalkeeper
+pelanggaran:
+  - foul
+  - misconduct
+  - offence
+tangan:
+  - handball
+handsball:
+  - handball
+tendangan bebas:
+  - free kick
+tendangan sudut:
+  - corner kick
+lemparan ke dalam:
+  - throw-in
+sundulan:
+  - heading
+wasit:
+  - referee
+asisten wasit:
+  - assistant referee
+  - linesman
+waktu tambahan:
+  - extra time
+  - allowance for time lost
+aduk penalti:
+  - kicks from the penalty mark
+  - penalty shootout
+gol:
+  - goal
+lapangan:
+  - field of play
+kotak penalti:
+  - penalty area
+area gawang:
+  - goal area
+offside offence:
+  - offside
+interfering with play:
+  - offside
+  - active play
+interfering with an opponent:
+  - offside
+  - obstruction

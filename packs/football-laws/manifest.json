@@ -1,0 +1,14 @@
+{
+  "id": "football-laws-2024-25",
+  "name": "Laws of the Game (IFAB/FIFA)",
+  "version": "1.0.0",
+  "edition": "2024/25",
+  "created_at": "2026-11-18T00:00:00Z",
+  "schema_version": "1.0",
+  "domain": "football-laws",
+  "profile": "hierarchical-clause",
+  "embedding_model": "multilingual-e5-small",
+  "embedding_dim": 384,
+  "generator_target": "qwen2.5-1.5b-instruct-q4_k_m",
+  "chunk_count": 0
+}

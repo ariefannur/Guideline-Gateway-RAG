@@ -1,0 +1,20 @@
+domain: football-laws
+profile: hierarchical-clause
+edition: "2024/25"
+description: "IFAB Laws of the Game 2024/25 reference pack"
+languages:
+  - en
+  - id
+min_retrieval_score: 0.01
+top_k: 5
+token_budget: 2500
+answer_format: decision_basis_notes
+scope_description: "IFAB/FIFA official Laws of the Game football regulations, penalties, offside, fouls, and match conduct."
+
+sources:
+  - file: sources/Laws-of-the-Game-2024_25.pdf
+    parser: pdf-structured
+    chunking: hierarchical-clause
+  - file: sources/laws.md
+    parser: markdown
+    chunking: hierarchical-clause

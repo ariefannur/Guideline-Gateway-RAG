@@ -1,0 +1,12 @@
+domain: template
+profile: hierarchical-clause
+edition: "2024"
+description: "Template guideline knowledge pack"
+languages:
+  - en
+  - id
+min_retrieval_score: 0.01
+top_k: 5
+token_budget: 2500
+answer_format: decision_basis_notes
+scope_description: "General template guidelines and standard operating procedures."

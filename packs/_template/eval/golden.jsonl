@@ -1,0 +1,2 @@
+{"id": "q-001", "q": "What is the general guideline?", "lang": "en", "type": "factual", "gold_answer": "...", "gold_chunks": ["sec1-1"], "must_abstain": false}
+{"id": "q-002", "q": "How to make a coffee on Mars?", "lang": "en", "type": "trap", "gold_answer": "Not enough basis found in the document.", "gold_chunks": [], "must_abstain": true}

@@ -1,0 +1,6 @@
+# Topic router keywords boosting sections
+# section_identifier: [keyword1, keyword2, ...]
+sec1:
+  - general
+  - pendahuluan
+  - definisi

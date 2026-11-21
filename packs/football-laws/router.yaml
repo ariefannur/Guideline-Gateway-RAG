@@ -1,0 +1,67 @@
+# Topic router rules mapping keyword concepts to Law numbers
+law1:
+  - field of play
+  - pitch
+  - goalposts
+  - crossbar
+  - boundary lines
+law3:
+  - players
+  - substitutes
+  - substitutions
+  - team
+law4:
+  - players' equipment
+  - shinguards
+  - jersey
+  - boots
+law5:
+  - referee
+  - powers
+  - duties
+  - match official
+law11:
+  - offside
+  - ofsaid
+  - interfering with play
+  - interfering with an opponent
+  - gaining an advantage
+  - offside position
+  - second-last opponent
+law12:
+  - fouls
+  - misconduct
+  - handball
+  - direct free kick
+  - indirect free kick
+  - disciplinary action
+  - yellow card
+  - red card
+  - sending-off
+  - caution
+  - holding
+  - tripping
+  - reckless
+  - violent conduct
+  - serious foul play
+  - biting
+  - spitting
+law13:
+  - free kicks
+  - direct free kick
+  - indirect free kick
+  - wall
+law14:
+  - penalty kick
+  - penalti
+  - penalty mark
+  - penalty shootout
+  - penalty spot
+law15:
+  - throw-in
+  - lemparan ke dalam
+law16:
+  - goal kick
+law17:
+  - corner kick
+  - tendangan sudut
