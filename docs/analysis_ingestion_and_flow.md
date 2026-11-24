@@ -17,18 +17,19 @@
 
 ```mermaid
 flowchart TD
-    A[Start: `scripts/ingest_football_laws.py`] --> B[Load pack.yaml]
-    B --> C[Gather source files (markdown / PDF)]
-    C --> D[Chunk each source<br/>ContextBuilder(max_context_tokens=2500)]
-    D --> E[Create Chunk objects]
-    E --> F[Batch embed texts<br/>PackEmbedder.embed(texts)]
-    F --> G[Attach embedding bytes to Chunk]
-    G --> H[Open SQLite DB (knowledge.sqlite)]
-    H --> I[Create tables if missing<br/>chunks + chunks_fts (FTS5)]
-    I --> J[INSERT OR REPLACE chunks<br/>(chunk_id, metadata, text, embedding)]
-    J --> K[Refresh FTS5 index]
-    K --> L[Commit & close DB]
-    L --> M[Ingestion complete]
+    A["Start: scripts/ingest_football_laws.py"] --> B["Load pack.yaml"]
+    B --> C["Gather source files (markdown / PDF)"]
+    C --> D["Chunk each source<br/>ContextBuilder(max_context_tokens=2500)"]
+    D --> E["Create Chunk objects"]
+    E --> F["Batch embed texts<br/>PackEmbedder.embed(texts)"]
+    F --> G["Attach embedding bytes to Chunk"]
+    G --> H["Open SQLite DB (knowledge.sqlite)"]
+    H --> I["Create tables if missing<br/>chunks + chunks_fts (FTS5)"]
+    I --> J["INSERT OR REPLACE chunks<br/>(chunk_id, metadata, text, embedding)"]
+    J --> K["Refresh FTS5 index"]
+    K --> L["Commit & close DB"]
+    L --> M["Ingestion complete"]
+
 ```
 
 **Catatan penting**
@@ -42,15 +43,15 @@ flowchart TD
 
 ```mermaid
 flowchart LR
-    U[User mengirim pertanyaan via UI] -->|HTTP POST /ask| S[FastAPI server (app.py)]
-    S --> P[engine.pipeline.run(query)]
-    P --> R[engine.retriever.search(query)] 
-    R --> DB[(SQLite knowledge.sqlite<br/>chunks_fts FTS5 search)]
+    U["User mengirim pertanyaan via UI"] -->|"HTTP POST /ask"| S["FastAPI server (app.py)"]
+    S --> P["engine.pipeline.run(query)"]
+    P --> R["engine.retriever.search(query)"] 
+    R --> DB[("SQLite knowledge.sqlite<br/>chunks_fts FTS5 search")]
     DB --> R
-    R -->|Top‑k relevant chunks| G[engine.generator.generate(query, chunks)]
-    G -->|LLM (e.g., OpenAI / local model) menghasilkan jawaban| P
-    P -->|Response payload| S
-    S -->|HTTP response| U
+    R -->|"Top-k relevant chunks"| G["engine.generator.generate(query, chunks)"]
+    G -->|"LLM (e.g., OpenAI / local model) menghasilkan jawaban"| P
+    P -->|"Response payload"| S
+    S -->|"HTTP response"| U
 ```
 
 **Rincian langkah**
@@ -68,30 +69,29 @@ flowchart LR
 ```mermaid
 flowchart TD
     %% 1. Buka / buat DB
-    DBOpen[Open SQLite DB (knowledge.sqlite)] --> CreateTables
+    DBOpen["Open SQLite DB (knowledge.sqlite)"] --> CreateTables
 
     %% 2. Buat tabel utama
-    CreateTables[CREATE TABLE IF NOT EXISTS chunks] --> TableChunks
-    TableChunks[✔ chunks (chunk_id PK, law_no, law_title, path, page, edition,
-                  source_type, text, embedding BLOB)] 
+    CreateTables["CREATE TABLE IF NOT EXISTS chunks"] --> TableChunks
+    TableChunks["✔ chunks (chunk_id PK, law_no, law_title, path, page, edition,<br/>source_type, text, embedding BLOB)"] 
 
     %% 3. Buat Virtual Table FTS5
     CreateTables --> CreateFTS
-    CreateFTS[CREATE VIRTUAL TABLE IF NOT EXISTS chunks_fts USING fts5] --> TableFTS
-    TableFTS[✔ chunks_fts (chunk_id UNINDEXED, law_title, path, text,
-                content='chunks', content_rowid='rowid')]
+    CreateFTS["CREATE VIRTUAL TABLE IF NOT EXISTS chunks_fts USING fts5"] --> TableFTS
+    TableFTS["✔ chunks_fts (chunk_id UNINDEXED, law_title, path, text,<br/>content='chunks', content_rowid='rowid')"]
 
     %% 4. Hubungkan FTS5 ke tabel utama
     TableFTS --> LinkContent
-    LinkContent[FTS5 automatically reads from *chunks* via the
-                `content='chunks'` clause] 
+    LinkContent["FTS5 automatically reads from chunks via the<br/>content='chunks' clause"] 
 
     %% 5. Populate / sync index
     LinkContent --> PopulateFTS
-    PopulateFTS[INSERT OR REPLACE rows into *chunks*<br/>→ FTS5 index updates automatically] 
+    PopulateFTS["INSERT OR REPLACE rows into chunks<br/>→ FTS5 index updates automatically"] 
 
     %% 6. Selesai
-    PopulateFTS --> Commit[COMMIT transaction] --> Close[Close DB connection] --> Done[✓ Ingestion step ready for chunk insertion]
+    PopulateFTS --> Commit["COMMIT transaction"] --> Close["Close DB connection"] --> Done["✓ Ingestion step ready for chunk insertion"]
+
+
 ```
 
 ### Penjelasan tiap langkah
